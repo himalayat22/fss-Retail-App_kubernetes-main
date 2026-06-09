@@ -10,6 +10,10 @@ spec:
     repoURL: https://github.com/himalayat22/fss-Retail-App_kubernetes-main.git
     targetRevision: main
     path: k8s-manifests
+
+    helm:
+      valueFiles:
+        - values.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: fss-clu

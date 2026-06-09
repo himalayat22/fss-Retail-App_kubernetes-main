@@ -1,15 +1,13 @@
-apiVersion: argoproj.io/v1alpha1
-kind: Rollout
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: retail-app-rollout
+  name: retail-app-deployment
   namespace: {{ .Values.namespace }}
 spec:
   replicas: {{ .Values.retailApp.replicaCount }}
-
   selector:
     matchLabels:
       app: retail
-
   template:
     metadata:
       labels:
@@ -19,7 +17,6 @@ spec:
         - name: retail-container
           image: "{{ .Values.retailApp.image.repository }}:{{ .Values.retailApp.image.tag }}"
           imagePullPolicy: {{ .Values.retailApp.image.pullPolicy }}
-
           ports:
             - containerPort: {{ .Values.retailApp.service.targetPort }}
 
@@ -53,9 +50,3 @@ spec:
                 secretKeyRef:
                   name: retail-app-secret
                   key: EMAIL_PASS
-
-  strategy:
-    blueGreen:
-      activeService: retail-app-service
-      previewService: retail-app-preview-service
-      autoPromotionEnabled: false
