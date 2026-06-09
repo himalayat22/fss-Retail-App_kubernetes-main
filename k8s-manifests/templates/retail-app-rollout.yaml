@@ -1,0 +1,61 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: retail-app-rollout
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.retailApp.replicaCount }}
+
+  selector:
+    matchLabels:
+      app: retail
+
+  template:
+    metadata:
+      labels:
+        app: retail
+    spec:
+      containers:
+        - name: retail-container
+          image: "{{ .Values.retailApp.image.repository }}:{{ .Values.retailApp.image.tag }}"
+          imagePullPolicy: {{ .Values.retailApp.image.pullPolicy }}
+
+          ports:
+            - containerPort: {{ .Values.retailApp.service.targetPort }}
+
+          env:
+            - name: MONGODB_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: retail-app-config
+                  key: MONGODB_URI
+
+            - name: SESSION_SECRET
+              valueFrom:
+                configMapKeyRef:
+                  name: retail-app-config
+                  key: SESSION_SECRET
+
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: retail-app-config
+                  key: PORT
+
+            - name: EMAIL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: retail-app-secret
+                  key: EMAIL_USER
+
+            - name: EMAIL_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: retail-app-secret
+                  key: EMAIL_PASS
+
+  strategy:
+    blueGreen:
+      activeService: retail-app-service
+      previewService: retail-app-preview-service
+      autoPromotionEnabled: false

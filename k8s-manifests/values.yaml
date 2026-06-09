@@ -1,0 +1,38 @@
+namespace: fss-clu
+
+retailApp:
+  replicaCount: 1
+
+  image:
+    repository: himalayat/fss-retail-app_kubernetes-main-frontend-app
+    tag: latest
+    pullPolicy: IfNotPresent
+
+  service:
+    type: LoadBalancer
+    port: 3130
+    targetPort: 3130
+
+  env:
+    mongodbUri: mongodb://mongodb:27017/myDatabase
+    sessionSecret: "1234"
+    port: "3130"
+
+  secret:
+    emailUser: "chagantyteja2502@gmail.com"
+    emailPass: "yxoq bjuk rdnt alzp"
+
+mongodb:
+  replicaCount: 1
+
+  image:
+    repository: mongo
+    tag: latest
+    pullPolicy: IfNotPresent
+
+  service:
+    port: 27017
+    targetPort: 27017
+
+  database:
+    name: myDatabase

@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: retail-app-config
+  namespace: {{ .Values.namespace }}
+data:
+  MONGODB_URI: {{ .Values.retailApp.env.mongodbUri | quote }}
+  SESSION_SECRET: {{ .Values.retailApp.env.sessionSecret | quote }}
+  PORT: {{ .Values.retailApp.env.port | quote }}
+  MONGO_INITDB_DATABASE: {{ .Values.mongodb.database.name | quote }}

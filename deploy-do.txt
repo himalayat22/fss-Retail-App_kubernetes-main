@@ -1,0 +1,173 @@
+==============================================================
+  FSS RETAIL APP PROJECT - FULL DEPLOYMENT STEPS (PowerShell)
+==============================================================
+NOTE: All commands are single-line (PowerShell on Windows)
+Region: ap-south-2  |  Namespace: fss-clu  |  Manifests: k8s-manifests/
+
+==============================================================
+PHASE 1 — Prerequisites Check
+==============================================================
+-- Install Prerequisites on Windows (run in Admin PowerShell) --
+# Install via winget:
+winget install Amazon.AWSCLI
+winget install Kubernetes.kubectl
+winget install Weaveworks.eksctl
+winget install Helm.Helm
+
+# OR install via Chocolatey:
+# choco install awscli kubernetes-cli eksctl kubernetes-helm
+
+-- Install Prerequisites on Ubuntu / Debian --
+# 1. AWS CLI:
+# sudo apt update && sudo apt install unzip curl -y
+# curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+# unzip awscliv2.zip && sudo ./aws/install && rm -rf awscliv2.zip ./aws
+
+# 2. kubectl:
+# curl -LO "https://dl.k8s.io/release/\$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+# chmod +x kubectl && sudo mv kubectl /usr/local/bin/kubectl
+
+# 3. eksctl:
+# curl -sLO "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_\$(uname -s)_amd64.tar.gz"
+# tar -xzf eksctl_\$(uname -s)_amd64.tar.gz -C /tmp && rm eksctl_\$(uname -s)_amd64.tar.gz
+# sudo mv /tmp/eksctl /usr/local/bin
+
+# 4. Helm:
+# curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3
+# chmod +x get_helm.sh && ./get_helm.sh && rm get_helm.sh
+
+-- Restart Terminal after installation to refresh environment variables --
+
+aws --version
+kubectl version --client
+eksctl version
+helm version
+
+==============================================================
+PHASE 2 — Create EKS Cluster
+==============================================================
+# Create the EKS cluster with name fss-cluster and nodegroup with 2 t3.small instances:
+eksctl create cluster --name fss-cluster --region ap-south-2 --nodegroup-name fss-nodes --node-type c7i-flex.large --nodes 2 --nodes-min 1 --nodes-max 3 --managed
+
+-- Wait 15-20 mins until you see: "EKS cluster is ready" --
+
+-- If it fails / gets stuck, delete and retry --
+# eksctl delete cluster --name fss-cluster --region ap-south-2
+
+==============================================================
+PHASE 3 — Connect kubectl to Cluster
+==============================================================
+aws eks update-kubeconfig --name fss-cluster --region ap-south-2
+kubectl get nodes
+
+-- Expected: 2 nodes with STATUS = Ready --
+
+==============================================================
+PHASE 4 — Create Namespaces, Service Account & RBAC
+==============================================================
+kubectl create namespace fss-clu
+kubectl create namespace argocd
+kubectl create serviceaccount fss-sa -n fss-clu
+kubectl create clusterrolebinding fss-admin --clusterrole=cluster-admin --serviceaccount=fss-clu:fss-sa
+kubectl get ns
+
+==============================================================
+PHASE 5 — Install ArgoCD
+==============================================================
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+kubectl wait --for=condition=available deployment/argocd-server -n argocd --timeout=180s
+kubectl get pods -n argocd
+
+-- Wait until all pods show STATUS = Running --
+
+==============================================================
+PHASE 6 — Expose ArgoCD UI
+==============================================================
+# Windows PowerShell command to patch Service to LoadBalancer:
+kubectl patch svc argocd-server -n argocd -p '{\"spec\": {\"type\": \"LoadBalancer\"}}'
+kubectl get svc -n argocd
+
+-- Copy the EXTERNAL-IP from argocd-server row --
+
+==============================================================
+PHASE 7 — Login to ArgoCD
+==============================================================
+-- 1. Download ArgoCD CLI if not already installed (run in project folder):
+# For Windows (PowerShell):
+# curl.exe -L -o argocd.exe https://github.com/argoproj/argo-cd/releases/latest/download/argocd-windows-amd64.exe
+
+-- 2. Get initial admin password:
+.\argocd.exe admin initial-password -n argocd
+
+-- 3. Log in (Username: admin | Password: from command above):
+.\argocd.exe login <PASTE-EXTERNAL-IP-HERE>:80 --insecure
+
+-- 4. Update your password:
+.\argocd.exe account update-password
+
+==============================================================
+PHASE 8 — Deploy K8s Manifests (run from project root folder)
+==============================================================
+cd "c:\Users\jeeva\Desktop\file\asses\fss-Retail-App_kubernetes"
+kubectl apply -f k8s-manifests/
+
+==============================================================
+PHASE 9 — Apply ArgoCD Application
+==============================================================
+kubectl apply -f k8s-manifests/argocd-application.yaml
+
+==============================================================
+PHASE 10 — Verify Everything
+==============================================================
+kubectl get pods -n fss-clu
+kubectl get svc -n fss-clu
+.\argocd.exe app get fss-retail-app --insecure
+
+-- Expected: --
+--   pods      → STATUS = Running (5 pods: 4 app + 1 mongodb) --
+--   svc       → retail-app-service has EXTERNAL-IP --
+--   argocd    → Sync Status = Synced, Health = Healthy --
+
+==============================================================
+PHASE 11 — Observability & Monitoring (Datadog)
+==============================================================
+-- 1. Add Datadog Helm Repository:
+helm repo add datadog https://helm.datadoghq.com
+helm repo update
+
+-- 2. Install Datadog Agent (Replace <YOUR_DATADOG_API_KEY> and <YOUR_DATADOG_SITE> with your key & site):
+helm upgrade --install datadog-agent datadog/datadog `
+  --set datadog.apiKey=<YOUR_DATADOG_API_KEY> `
+  --set datadog.site=<YOUR_DATADOG_SITE_E_G_us5.datadoghq.com> `
+  --set datadog.logs.enabled=true `
+  --set datadog.logs.containerCollectAll=true `
+  --set datadog.apm.enabled=true `
+  --set datadog.processAgent.enabled=true `
+  --namespace default
+
+-- 3. Verify Datadog pods are running:
+kubectl get pods -l app=datadog-agent
+
+==============================================================
+PHASE 12 — AI-Driven Troubleshooting (Gemini API - Free)
+==============================================================
+-- 1. Install required Python packages:
+pip install google-genai
+
+-- 2. Set your Gemini API Key (PowerShell):
+# Note: Get a free API Key from Google AI Studio: https://aistudio.google.com/
+$env:GEMINI_API_KEY="your-api-key-here"
+
+-- 3. Run the AI Agent script (fully automated dynamic pod detection):
+python ai-agent.py
+
+==============================================================
+ROLLBACK (if needed)
+==============================================================
+kubectl rollout undo deployment/retail-app-deployment -n murali-ns
+
+==============================================================
+DELETE CLUSTER (when done / if resetting)
+==============================================================
+eksctl delete cluster --name fss-cluster --region ap-south-2
+==============================================================
